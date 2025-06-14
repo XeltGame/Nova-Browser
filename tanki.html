@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Nova Games Browser</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #333;
+        }
+        .game-container {
+            width: 1200px;
+            margin: 0 auto;
+            position: relative;
+        }
+        canvas {
+            border: 1px solid black;
+            background: #87CEEB;
+            display: block;
+        }
+        #scores {
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+        .player-score {
+            padding: 10px;
+            border: 2px solid #333;
+            border-radius: 5px;
+            background: white;
+        }
+        .tank-cards {
+            position: absolute;
+            display: flex;
+            gap: 10px;
+            z-index: 1;
+        }
+        #left-cards {
+            left: 20px;
+            bottom: 20px;
+        }
+        #right-cards {
+            right: 20px;
+            bottom: 20px;
+            flex-direction: row-reverse;
+        }
+        .tank-card {
+            width: 80px;
+            height: 100px;
+            border: 2px solid #333;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 5px;
+            cursor: pointer;
+        }
+        .tank-icon {
+            width: 40px;
+            height: 40px;
+            margin: 5px;
+        }
+        .tank-price {
+            margin-top: 5px;
+            font-weight: bold;
+        }
+        .tank-key {
+            margin-top: 5px;
+            color: #666;
+        }
+        @keyframes insufficientFunds {
+            0% { color: black; }
+            50% { color: blue; }
+            100% { color: black; }
+        }
+        .insufficient-funds {
+            animation: insufficientFunds 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div id="scores">
+            <div class="player-score" id="leftScore">Левый игрок: 0 очков</div>
+            <div class="player-score" id="rightScore">Правый игрок: 0 очков</div>
+        </div>
+
+        <canvas id="gameCanvas" width="1200" height="600"></canvas>
+
+        <div class="tank-cards" id="left-cards">
+            <div class="tank-card" id="left-medium">
+                <div class="tank-icon" style="background: yellow;"></div>
+                <div class="tank-price">150 ₽</div>
+                <div class="tank-key">1</div>
+            </div>
+            <div class="tank-card" id="left-artillery">
+                <div class="tank-icon" style="background: green;"></div>
+                <div class="tank-price">100 ₽</div>
+                <div class="tank-key">2</div>
+            </div>
+            <div class="tank-card" id="left-heavy">
+                <div class="tank-icon" style="background: red;"></div>
+                <div class="tank-price">200 ₽</div>
+                <div class="tank-key">3</div>
+            </div>
+        </div>
+
+        <div class="tank-cards" id="right-cards">
+            <div class="tank-card" id="right-medium">
+                <div class="tank-icon" style="background: yellow;"></div>
+                <div class="tank-price">150 ₽</div>
+                <div class="tank-key">7</div>
+            </div>
+            <div class="tank-card" id="right-artillery">
+                <div class="tank-icon" style="background: green;"></div>
+                <div class="tank-price">100 ₽</div>
+                <div class="tank-key">8</div>
+            </div>
+            <div class="tank-card" id="right-heavy">
+                <div class="tank-icon" style="background: red;"></div>
+                <div class="tank-price">200 ₽</div>
+                <div class="tank-key">9</div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const GROUND_LEVEL = 450;
+
+        let cloudPositions = [];
+        for(let i = 0; i < 8; i++) {
+            cloudPositions.push({
+                x: Math.random() * canvas.width,
+                y: 50 + Math.random() * 100,
+                size: 20 + Math.random() * 20,
+                speed: 0.2 + Math.random() * 0.3
+            });
+        }
+
+        const players = {
+            left: { score: 100 },
+            right: { score: 100 }
+        };
+
+        const tankCosts = {
+            artillery: 100,
+            medium: 150,
+            heavy: 200
+        };
+
+        setInterval(() => {
+            players.left.score += 10;
+            players.right.score += 10;
+            updateScoreDisplay();
+        }, 1000);
+
+        function updateScoreDisplay() {
+            document.getElementById('leftScore').textContent = `Левый игрок: ${players.left.score} очков`;
+            document.getElementById('rightScore').textContent = `Правый игрок: ${players.right.score} очков`;
+        }
+
+        function drawCloud(x, y, size) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.arc(x + size, y, size * 0.8, 0, Math.PI * 2);
+            ctx.arc(x - size, y, size * 0.8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawMountain(x, y, width, height) {
+            ctx.fillStyle = '#6B6B6B';
+            ctx.beginPath();
+            ctx.moveTo(x, GROUND_LEVEL);
+            ctx.lineTo(x + width/2, y);
+            ctx.lineTo(x + width, GROUND_LEVEL);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.moveTo(x + width/2, y);
+            ctx.lineTo(x + width/2 + 20, y + 30);
+            ctx.lineTo(x + width/2 - 20, y + 30);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawTree(x, y) {
+            ctx.fillStyle = '#5C4033';
+            ctx.fillRect(x - 5, y - 40, 10, 40);
+
+            ctx.fillStyle = '#228B22';
+            ctx.beginPath();
+            ctx.moveTo(x - 20, y - 20);
+            ctx.lineTo(x, y - 60);
+            ctx.lineTo(x + 20, y - 20);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawBackground() {
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            cloudPositions.forEach(cloud => {
+                cloud.x += cloud.speed;
+                if(cloud.x > canvas.width + cloud.size) {
+                    cloud.x = -cloud.size;
+                }
+                drawCloud(cloud.x, cloud.y, cloud.size);
+            });
+
+            const mountainPositions = [0, 300, 600, 900];
+            mountainPositions.forEach(x => {
+                drawMountain(x, 250, 300, 200);
+            });
+
+            ctx.fillStyle = '#90EE90';
+            ctx.fillRect(0, GROUND_LEVEL, canvas.width, canvas.height - GROUND_LEVEL);
+
+            const treePositions = [100, 250, 400, 550, 700, 850, 1000, 1150];
+            treePositions.forEach(x => {
+                drawTree(x, GROUND_LEVEL);
+            });
+        }
+
+        class Base {
+            constructor(x, y, isLeftPlayer) {
+                this.x = x;
+                this.y = y;
+                this.hp = 500;
+                this.isLeftPlayer = isLeftPlayer;
+                this.width = 50;
+                this.height = 100;
+            }
+
+            draw() {
+                ctx.fillStyle = this.isLeftPlayer ? 'blue' : 'red';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+
+                ctx.fillStyle = 'white';
+                ctx.fillRect(this.x, this.y - 10, this.width, 5);
+                ctx.fillStyle = 'green';
+                ctx.fillRect(this.x, this.y - 10, (this.hp / 500) * this.width, 5);
+            }
+        }
+
+class Tank {
+    constructor(x, y, type, isLeftPlayer) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.isLeftPlayer = isLeftPlayer;
+        this.moving = true;
+        this.shooting = false;
+        this.bullets = [];
+        this.lastShot = 0;
+        this.shootingCooldown = 1000;
+        this.width = 30;
+        this.height = 30;
+
+        switch(type) {
+            case 'artillery':
+                this.hp = 50;
+                this.damage = 30;
+                this.speed = 3;
+                this.color = 'green';
+                this.range = 300;
+                break;
+            case 'medium':
+                this.hp = 100;
+                this.damage = 20;
+                this.speed = 2;
+                this.color = 'yellow';
+                this.range = 200;
+                break;
+            case 'heavy':
+                this.hp = 200;
+                this.damage = 40;
+                this.speed = 1;
+                this.color = 'red';
+                this.range = 150;
+                break;
+        }
+    }
+
+    checkTarget() {
+        const enemies = activeTanks.filter(tank => tank.isLeftPlayer !== this.isLeftPlayer);
+        const targetBase = this.isLeftPlayer ? rightBase : leftBase;
+
+        // Проверка танков противника
+        for (let enemy of enemies) {
+            const distance = Math.sqrt(
+                Math.pow(enemy.x - this.x, 2) + 
+                Math.pow(enemy.y - this.y, 2)
+            );
+            if (distance <= this.range) {
+                this.moving = false;
+                return true;
+            }
+        }
+
+        // Проверка базы противника
+        const distanceToBase = Math.sqrt(
+            Math.pow(targetBase.x - this.x, 2) + 
+            Math.pow(targetBase.y - this.y, 2)
+        );
+        if (distanceToBase <= this.range) {
+            this.moving = false;
+            return true;
+        }
+
+        this.moving = !this.shooting; // Двигаемся только если не стреляем
+        return false;
+    }
+
+    move() {
+        if (this.moving) {
+            if (this.isLeftPlayer && this.x < 1100) {
+                this.x += this.speed;
+            } else if (!this.isLeftPlayer && this.x > 50) {
+                this.x -= this.speed;
+            }
+        }
+    }
+
+    canShoot() {
+        return Date.now() - this.lastShot >= this.shootingCooldown;
+    }
+
+    shoot() {
+        if (this.canShoot() && this.checkTarget()) {
+            this.shooting = true;
+            this.moving = false;
+            this.lastShot = Date.now();
+            
+            const bullet = {
+                x: this.isLeftPlayer ? this.x + this.width : this.x,
+                y: this.y + this.height/2,
+                speed: 5,
+                direction: this.isLeftPlayer ? 1 : -1,
+                damage: this.damage
+            };
+            this.bullets.push(bullet);
+            
+            // Увеличим время остановки после выстрела
+            setTimeout(() => {
+                this.shooting = false;
+                // Проверяем наличие целей перед возобновлением движения
+                this.checkTarget();
+            }, 1000);
+        }
+    }
+
+    update() {
+        this.checkTarget(); // Проверяем цели перед движением
+        this.move();
+        this.updateBullets();
+        this.shoot();
+    }
+
+    updateBullets() {
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+            const bullet = this.bullets[i];
+            bullet.x += bullet.speed * bullet.direction;
+
+            if (bullet.x < 0 || bullet.x > canvas.width) {
+                this.bullets.splice(i, 1);
+            }
+        }
+    }
+
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+
+        // Дуло
+        ctx.beginPath();
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 3;
+        if (this.isLeftPlayer) {
+            ctx.moveTo(this.x + this.width, this.y + this.height/2);
+            ctx.lineTo(this.x + this.width + 10, this.y + this.height/2);
+        } else {
+            ctx.moveTo(this.x, this.y + this.height/2);
+            ctx.lineTo(this.x - 10, this.y + this.height/2);
+        }
+        ctx.stroke();
+
+        // HP бар
+        ctx.fillStyle = 'white';
+        ctx.fillRect(this.x, this.y - 10, this.width, 5);
+        ctx.fillStyle = 'green';
+        ctx.fillRect(this.x, this.y - 10, (this.hp / 200) * this.width, 5);
+
+        // Пули
+        ctx.fillStyle = 'black';
+        this.bullets.forEach(bullet => {
+            ctx.beginPath();
+            ctx.arc(bullet.x, bullet.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+}
+
+        const leftBase = new Base(50, GROUND_LEVEL - 100, true);
+        const rightBase = new Base(1100, GROUND_LEVEL - 100, false);
+        let activeTanks = [];
+        let gameOver = false;
+
+        function flashInsufficientFunds(isLeftPlayer, type) {
+            const cardId = `${isLeftPlayer ? 'left' : 'right'}-${type}`;
+            const card = document.getElementById(cardId);
+            const price = card.querySelector('.tank-price');
+            
+            price.classList.add('insufficient-funds');
+            setTimeout(() => {
+                price.classList.remove('insufficient-funds');
+            }, 500);
+        }
+
+        function spawnTank(type, isLeftPlayer) {
+            const player = isLeftPlayer ? players.left : players.right;
+            const cost = tankCosts[type];
+
+            if (player.score >= cost) {
+                player.score -= cost;
+                const tank = new Tank(
+                    isLeftPlayer ? leftBase.x : rightBase.x - 30,
+                    GROUND_LEVEL - 30,
+                    type,
+                    isLeftPlayer
+                );
+                activeTanks.push(tank);
+                updateScoreDisplay();
+            } else {
+                flashInsufficientFunds(isLeftPlayer, type);
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case '1':
+                    spawnTank('medium', true);
+                    break;
+                case '2':
+                    spawnTank('artillery', true);
+                    break;
+                case '3':
+                    spawnTank('heavy', true);
+                    break;
+                case '7':
+                    spawnTank('medium', false);
+                    break;
+                case '8':
+                    spawnTank('artillery', false);
+                    break;
+                case '9':
+                    spawnTank('heavy', false);
+                    break;
+            }
+        });
+
+        document.querySelectorAll('.tank-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const [side, type] = card.id.split('-');
+                spawnTank(type, side === 'left');
+            });
+        });
+
+        function checkCollisions() {
+            for (let tank of activeTanks) {
+                for (let bullet of tank.bullets) {
+                    for (let i = activeTanks.length - 1; i >= 0; i--) {
+                        const targetTank = activeTanks[i];
+                        if (targetTank.isLeftPlayer !== tank.isLeftPlayer) {
+                            if (bullet.x > targetTank.x && 
+                                bullet.x < targetTank.x + targetTank.width && 
+                                bullet.y > targetTank.y && 
+                                bullet.y < targetTank.y + targetTank.height) {
+                                targetTank.hp -= bullet.damage;
+                                
+                                const bulletIndex = tank.bullets.indexOf(bullet);
+                                if (bulletIndex > -1) {
+                                    tank.bullets.splice(bulletIndex, 1);
+                                }
+
+                                if (targetTank.hp <= 0) {
+                                    const scorer = tank.isLeftPlayer ? players.left : players.right;
+                                    scorer.score += 50;
+                                    activeTanks.splice(i, 1);
+                                    updateScoreDisplay();
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                    const targetBase = tank.isLeftPlayer ? rightBase : leftBase;
+                    if (bullet.x > targetBase.x && 
+                        bullet.x < targetBase.x + targetBase.width && 
+                        bullet.y > targetBase.y && 
+                        bullet.y < targetBase.y + targetBase.height) {
+                        targetBase.hp -= bullet.damage;
+                        const bulletIndex = tank.bullets.indexOf(bullet);
+                        if (bulletIndex > -1) {
+                            tank.bullets.splice(bulletIndex, 1);
+                        }
+                        
+                        const scorer = tank.isLeftPlayer ? players.left : players.right;
+                        scorer.score += 5;
+                        updateScoreDisplay();
+                    }
+                }
+            }
+        }
+
+	function resetGame() {
+	    players.left.score = 100;
+	    players.right.score = 100;
+	    leftBase.hp = 500;
+	    rightBase.hp = 500;
+	    activeTanks = [];
+	    gameOver = false;
+	    updateScoreDisplay();
+	}
+
+	function gameLoop() {
+   	 if (!gameOver) {
+    	    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    	    
+     	    drawBackground();
+
+     	    leftBase.draw();
+      	    rightBase.draw();
+
+ 	    activeTanks.forEach(tank => {
+            tank.update();
+            tank.draw();
+        });
+
+        checkCollisions();
+
+        if (leftBase.hp <= 0 && !gameOver) {
+            gameOver = true;
+            activeTanks = [];
+            setTimeout(() => {
+                alert("Правый игрок победил!");
+                resetGame();
+            }, 100);
+        } else if (rightBase.hp <= 0 && !gameOver) {
+            gameOver = true;
+            activeTanks = [];
+            setTimeout(() => {
+                alert("Левый игрок победил!");
+                resetGame();
+            }, 100);
+        }
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
+	updateScoreDisplay();
+	gameLoop();
+
+    </script>
+</body>
+</html>
