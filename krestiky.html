@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Крестики-нолики против ИИ</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: white;
+            border: 2px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .cell:hover {
+            background-color: #e0e0e0;
+        }
+        .status {
+            font-size: 24px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .x {
+            color: #f44336;
+        }
+        .o {
+            color: #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Крестики-нолики против ИИ</h1>
+    <div class="status" id="status">Ваш ход (Вы - X)</div>
+    <div class="board" id="board">
+        <div class="cell" data-index="0"></div>
+        <div class="cell" data-index="1"></div>
+        <div class="cell" data-index="2"></div>
+        <div class="cell" data-index="3"></div>
+        <div class="cell" data-index="4"></div>
+        <div class="cell" data-index="5"></div>
+        <div class="cell" data-index="6"></div>
+        <div class="cell" data-index="7"></div>
+        <div class="cell" data-index="8"></div>
+    </div>
+    <button id="reset">Новая игра</button>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const board = document.getElementById('board');
+            const cells = document.querySelectorAll('.cell');
+            const status = document.getElementById('status');
+            const resetButton = document.getElementById('reset');
+            
+            let gameBoard = ['', '', '', '', '', '', '', '', ''];
+            let currentPlayer = 'X'; // Игрок - X, ИИ - O
+            let gameActive = true;
+            
+            // Состояния игры
+            const WINNING_CONDITIONS = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], // Горизонтальные
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], // Вертикальные
+                [0, 4, 8], [2, 4, 6]             // Диагональные
+            ];
+            
+            // Обработчик клика по ячейке
+            function handleCellClick(e) {
+                const index = e.target.getAttribute('data-index');
+                
+                // Проверка, можно ли сделать ход
+                if (gameBoard[index] !== '' || !gameActive || currentPlayer !== 'X') return;
+                
+                // Ход игрока
+                makeMove(index, 'X');
+                
+                // Проверка на победу или ничью
+                if (checkWin('X')) {
+                    status.textContent = 'Вы победили!';
+                    gameActive = false;
+                    return;
+                } else if (isBoardFull()) {
+                    status.textContent = 'Ничья!';
+                    gameActive = false;
+                    return;
+                }
+                
+                // Ход ИИ
+                currentPlayer = 'O';
+                status.textContent = 'Ход ИИ...';
+                
+                // Небольшая задержка для "естественности" хода ИИ
+                setTimeout(() => {
+                    const bestMove = findBestMove();
+                    makeMove(bestMove, 'O');
+                    
+                    if (checkWin('O')) {
+                        status.textContent = 'ИИ победил!';
+                        gameActive = false;
+                    } else if (isBoardFull()) {
+                        status.textContent = 'Ничья!';
+                        gameActive = false;
+                    } else {
+                        currentPlayer = 'X';
+                        status.textContent = 'Ваш ход (Вы - X)';
+                    }
+                }, 500);
+            }
+            
+            // Сделать ход
+            function makeMove(index, player) {
+                gameBoard[index] = player;
+                const cell = document.querySelector(`.cell[data-index="${index}"]`);
+                cell.textContent = player;
+                cell.classList.add(player.toLowerCase());
+            }
+            
+            // Проверка на победу
+            function checkWin(player) {
+                return WINNING_CONDITIONS.some(condition => {
+                    return condition.every(index => {
+                        return gameBoard[index] === player;
+                    });
+                });
+            }
+            
+            // Проверка на ничью
+            function isBoardFull() {
+                return gameBoard.every(cell => cell !== '');
+            }
+            
+            // Минимаксный алгоритм для ИИ
+            function minimax(board, depth, isMaximizing) {
+                // Проверка терминальных состояний
+                if (checkWin('O')) return 10 - depth;
+                if (checkWin('X')) return depth - 10;
+                if (isBoardFull()) return 0;
+                
+                if (isMaximizing) {
+                    let bestScore = -Infinity;
+                    for (let i = 0; i < board.length; i++) {
+                        if (board[i] === '') {
+                            board[i] = 'O';
+                            let score = minimax(board, depth + 1, false);
+                            board[i] = '';
+                            bestScore = Math.max(score, bestScore);
+                        }
+                    }
+                    return bestScore;
+                } else {
+                    let bestScore = Infinity;
+                    for (let i = 0; i < board.length; i++) {
+                        if (board[i] === '') {
+                            board[i] = 'X';
+                            let score = minimax(board, depth + 1, true);
+                            board[i] = '';
+                            bestScore = Math.min(score, bestScore);
+                        }
+                    }
+                    return bestScore;
+                }
+            }
+            
+            // Найти лучший ход для ИИ
+            function findBestMove() {
+                let bestScore = -Infinity;
+                let bestMove = -1;
+                
+                for (let i = 0; i < gameBoard.length; i++) {
+                    if (gameBoard[i] === '') {
+                        gameBoard[i] = 'O';
+                        let score = minimax(gameBoard, 0, false);
+                        gameBoard[i] = '';
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestMove = i;
+                        }
+                    }
+                }
+                
+                return bestMove;
+            }
+            
+            // Сброс игры
+            function resetGame() {
+                gameBoard = ['', '', '', '', '', '', '', '', ''];
+                currentPlayer = 'X';
+                gameActive = true;
+                status.textContent = 'Ваш ход (Вы - X)';
+                
+                cells.forEach(cell => {
+                    cell.textContent = '';
+                    cell.classList.remove('x', 'o');
+                });
+            }
+            
+            // Назначение обработчиков событий
+            cells.forEach(cell => {
+                cell.addEventListener('click', handleCellClick);
+            });
+            
+            resetButton.addEventListener('click', resetGame);
+        });
+    </script>
+</body>
+</html>
+
+<a href="2048.html">1</a>
+<a href="financ.html">2</a>
+<a href="snake.html">3</a>
+<a href="victor.html">4</a>
+<a href="scyblock.html">5</a>
+<a href="dino.html">6</a>
+<a href="shashki.html">7</a>
+<a href="krestiky.html">8</a>
+<a href="pamyt.html">9</a>
+<a href="yeouch.html">10</a>
+<a href="capere.html">11</a>
+<a href="doogle.html">12</a>

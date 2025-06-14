@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2048 Игра</title>
+
+    
+    <style>
+        
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #faf8ef;
+            color: #776e65;
+            touch-action: none;
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 400px;
+            margin-bottom: 20px;
+        }
+
+        #score-container {
+            font-size: 1.5em;
+            padding: 10px 20px;
+            background-color: #bbada0;
+            color: white;
+            border-radius: 5px;
+        }
+
+        #reset-button {
+            padding: 10px 20px;
+            font-size: 1em;
+            background-color: #8f7a66;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        #reset-button:hover {
+            background-color: #776e65;
+        }
+
+        #grid-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            width: 400px;
+            height: 400px;
+            background-color: #bbada0;
+            border: 10px solid #bbada0;
+            border-radius: 6px;
+            gap: 10px;
+            position: relative;
+        }
+
+        .grid-cell {
+            background-color: #cdc1b4;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            font-weight: bold;
+            transition: transform 0.1s ease-in-out, background-color 0.1s ease-in-out;
+        }
+
+        .tile { color: #776e65; }
+        .tile.tile-2 { background-color: #eee4da; }
+        .tile.tile-4 { background-color: #ede0c8; }
+        .tile.tile-8 { background-color: #f2b179; color: #f9f6f2; }
+        .tile.tile-16 { background-color: #f59563; color: #f9f6f2; }
+        .tile.tile-32 { background-color: #f67c5f; color: #f9f6f2; }
+        .tile.tile-64 { background-color: #f65e3b; color: #f9f6f2; }
+        .tile.tile-128 { background-color: #edcf72; color: #f9f6f2; font-size: 1.8em; }
+        .tile.tile-256 { background-color: #edcc61; color: #f9f6f2; font-size: 1.8em; }
+        .tile.tile-512 { background-color: #edc850; color: #f9f6f2; font-size: 1.8em; }
+        .tile.tile-1024 { background-color: #edc53f; color: #f9f6f2; font-size: 1.5em; }
+        .tile.tile-2048 { background-color: #edc22e; color: #f9f6f2; font-size: 1.5em; }
+        .tile.tile-higher { background-color: #3c3a32; color: #f9f6f2; font-size: 1.3em; }
+
+        .tile-new { animation: appear 0.2s ease-in-out; }
+        .tile-merged { animation: pop 0.2s ease-in-out; }
+
+        @keyframes appear {
+            0% { transform: scale(0); }
+            100% { transform: scale(1); }
+        }
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        #game-over-message {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(238, 228, 218, 0.73);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 2em;
+            color: #776e65;
+            border-radius: 6px;
+            z-index: 100;
+        }
+
+        #game-over-message p {
+            margin: 10px 0;
+        }
+
+        .instructions {
+            margin-top: 20px;
+            text-align: center;
+            color: #776e65;
+            font-size: 1.1em;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <h1>2048</h1>
+    <div class="controls">
+        <div id="score-container">Счет: <span id="score">0</span></div>
+        <button id="reset-button">Новая игра</button>
+    </div>
+    <div id="grid-container"></div>
+
+    <!-- 🎯 Обновленное сообщение "Игра окончена" -->
+    <div id="game-over-message" style="display: none;">
+        <b>Игра окончена!</b>
+        <p id="final-score"></p>
+        <p style="font-size: 0.7em;">Нажмите <b>Enter</b> для перезапуска</p>
+    </div>
+
+    <div class="instructions">
+        Управление:<br>
+        Стрелочки или WASD — перемещение плиток<br>
+    </div>
+
+    <!-- 💡 Скрипт -->
+    <script>
+        const GRID_SIZE = 4;
+        const gridContainer = document.getElementById('grid-container');
+        const scoreDisplay = document.getElementById('score');
+        const resetButton = document.getElementById('reset-button');
+        const gameOverMessage = document.getElementById('game-over-message');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        let grid = [];
+        let score = 0;
+        let isGameOver = false;
+
+        function initGame() {
+            grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0));
+            score = 0;
+            isGameOver = false;
+            updateScoreDisplay();
+            gameOverMessage.style.display = 'none';
+
+            while (gridContainer.firstChild) {
+                gridContainer.removeChild(gridContainer.firstChild);
+            }
+
+            for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('grid-cell');
+                gridContainer.appendChild(cell);
+            }
+
+            addRandomTile();
+            addRandomTile();
+            renderGrid();
+        }
+
+        function renderGrid() {
+            const cells = gridContainer.children;
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const index = r * GRID_SIZE + c;
+                    const cell = cells[index];
+                    const value = grid[r][c];
+
+                    cell.textContent = value === 0 ? '' : value;
+                    cell.className = 'grid-cell';
+
+                    if (value !== 0) {
+                        cell.classList.add('tile');
+                        cell.classList.add(`tile-${value > 2048 ? 'higher' : value}`);
+                    }
+                }
+            }
+        }
+
+        function addRandomTile(isNew = true) {
+            const empty = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (grid[r][c] === 0) empty.push({ r, c });
+                }
+            }
+
+            if (empty.length > 0) {
+                const { r, c } = empty[Math.floor(Math.random() * empty.length)];
+                grid[r][c] = Math.random() < 0.9 ? 2 : 4;
+                if (isNew) {
+                    const index = r * GRID_SIZE + c;
+                    const tile = gridContainer.children[index];
+                    tile.classList.add('tile-new');
+                    setTimeout(() => tile.classList.remove('tile-new'), 200);
+                }
+            }
+        }
+
+        function updateScoreDisplay() {
+            scoreDisplay.textContent = score;
+        }
+
+        function endGame() {
+            isGameOver = true;
+            finalScoreDisplay.textContent = `Ваш счет: ${score}`;
+            gameOverMessage.style.display = 'flex';
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                initGame();
+                return;
+            }
+
+            if (isGameOver) return;
+
+            let moved = false;
+            switch (event.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'ц':
+                    moved = moveUp(); break;
+                case 'ArrowDown':
+                case 's':
+                case 'ы':
+                    moved = moveDown(); break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'ф':
+                    moved = moveLeft(); break;
+                case 'ArrowRight':
+                case 'd':
+                case 'в':
+                    moved = moveRight(); break;
+                default:
+                    return;
+            }
+
+            event.preventDefault();
+
+            if (moved) {
+                addRandomTile();
+                renderGrid();
+                if (checkGameOver()) endGame();
+            }
+        }
+
+        document.addEventListener('keydown', handleKeyPress);
+
+        resetButton.addEventListener('click', initGame);
+
+        function moveLeft() {
+            let moved = false;
+            for (let r = 0; r < GRID_SIZE; r++) {
+                const { newRow, merged } = slideAndMerge(grid[r]);
+                if (merged) moved = true;
+                grid[r] = newRow;
+            }
+            return moved;
+        }
+
+        function moveRight() {
+            let moved = false;
+            for (let r = 0; r < GRID_SIZE; r++) {
+                const reversed = grid[r].slice().reverse();
+                const { newRow, merged } = slideAndMerge(reversed);
+                if (merged) moved = true;
+                grid[r] = newRow.reverse();
+            }
+            return moved;
+        }
+
+        function moveUp() {
+            let moved = false;
+            let transposed = transpose(grid);
+            for (let c = 0; c < GRID_SIZE; c++) {
+                const { newRow, merged } = slideAndMerge(transposed[c]);
+                if (merged) moved = true;
+                transposed[c] = newRow;
+            }
+            grid = transpose(transposed);
+            return moved;
+        }
+
+        function moveDown() {
+            let moved = false;
+            let transposed = transpose(grid);
+            for (let c = 0; c < GRID_SIZE; c++) {
+                const reversed = transposed[c].slice().reverse();
+                const { newRow, merged } = slideAndMerge(reversed);
+                if (merged) moved = true;
+                transposed[c] = newRow.reverse();
+            }
+            grid = transpose(transposed);
+            return moved;
+        }
+
+        function slideAndMerge(line) {
+            const original = [...line];
+            let arr = line.filter(val => val !== 0);
+            let merged = false;
+
+            for (let i = 0; i < arr.length - 1; i++) {
+                if (arr[i] === arr[i + 1]) {
+                    arr[i] *= 2;
+                    score += arr[i];
+                    arr.splice(i + 1, 1);
+                    merged = true;
+                }
+            }
+
+            while (arr.length < GRID_SIZE) arr.push(0);
+
+            if (!merged) {
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    if (arr[i] !== original[i]) {
+                        merged = true;
+                        break;
+                    }
+                }
+            }
+
+            updateScoreDisplay();
+            return { newRow: arr, merged };
+        }
+
+        function transpose(mat) {
+            return mat[0].map((_, i) => mat.map(row => row[i]));
+        }
+
+        function checkGameOver() {
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (grid[r][c] === 0 ||
+                        (c < GRID_SIZE - 1 && grid[r][c] === grid[r][c + 1]) ||
+                        (r < GRID_SIZE - 1 && grid[r][c] === grid[r + 1][c]))
+                        return false;
+                }
+            }
+            return true;
+        }
+
+        initGame();
+    </script>
+</body>
+</html>

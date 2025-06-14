@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Змейка</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #7b7d77;
+            font-family: 'Arial', sans-serif;
+            color: #fff;
+        }
+        #gameCanvas {
+            border: 2px solid #fff;
+        }
+        #scoreBoard {
+            margin-top: 20px;
+            font-size: 1.5em;
+        }
+        #gameOverScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0,0,0,0.8);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 1.5em;
+            display: none; /* Скрыто по умолчанию */
+            border: 2px solid #fff;
+        }
+        #gameOverScreen h2 {
+            margin-top: 0;
+        }
+        #gameOverScreen button {
+            padding: 10px 20px;
+            font-size: 1em;
+            margin-top: 20px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        #instructions {
+            margin-bottom: 15px;
+            font-size: 0.9em;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">Управление: Стрелки клавиатуры</div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="scoreBoard">Очки: <span id="score">0</span></div>
+
+    <div id="gameOverScreen">
+        <h2>Игра Окончена!</h2>
+        <p>Ваш счет: <span id="finalScore">0</span></p>
+        <button onclick="restartGame()">Начать заново</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreEl = document.getElementById('finalScore');
+
+        const gridSize = 20; // Размер одной клетки и сегмента змейки
+        let tileCountX, tileCountY; // Количество клеток по горизонтали и вертикали
+
+        let snake, food;
+        let velocityX, velocityY;
+        let score;
+        let gameRunning;
+        let gameInterval;
+        const initialTailLength = 3;
+        let currentTailLength;
+        const gameSpeed = 120; // миллисекунды, чем меньше, тем быстрее
+
+        function setupCanvas() {
+            // Делаем размер канваса кратным gridSize для удобства
+            const maxWidth = window.innerWidth * 0.8;
+            const maxHeight = window.innerHeight * 0.7;
+
+            canvas.width = Math.floor(maxWidth / gridSize) * gridSize;
+            canvas.height = Math.floor(maxHeight / gridSize) * gridSize;
+
+            tileCountX = canvas.width / gridSize;
+            tileCountY = canvas.height / gridSize;
+        }
+
+
+        function initGame() {
+            gameRunning = true;
+            gameOverScreen.style.display = 'none';
+
+            // Начальная позиция змейки (центр)
+            const startX = Math.floor(tileCountX / 2);
+            const startY = Math.floor(tileCountY / 2);
+
+            snake = [];
+            currentTailLength = initialTailLength;
+            for (let i = 0; i < currentTailLength; i++) {
+                snake.push({ x: startX - i, y: startY }); // Голова справа
+            }
+
+            velocityX = 1; // Движется вправо
+            velocityY = 0;
+
+            score = 0;
+            updateScoreDisplay();
+            spawnFood();
+
+            if (gameInterval) clearInterval(gameInterval);
+            gameInterval = setInterval(gameLoop, gameSpeed);
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return;
+
+            updateSnakePosition();
+            if (!gameRunning) return; // Проверка, если игра закончилась внутри updateSnakePosition
+
+            clearCanvas();
+            drawFood();
+            drawSnake();
+        }
+
+        function updateSnakePosition() {
+            let headX = snake[0].x + velocityX;
+            let headY = snake[0].y + velocityY;
+
+            // Проверка на столкновение со стеной
+            if (headX < 0 || headX >= tileCountX || headY < 0 || headY >= tileCountY) {
+                gameOver();
+                return;
+            }
+
+            // Проверка на столкновение с собой
+            for (let i = 1; i < snake.length; i++) {
+                if (headX === snake[i].x && headY === snake[i].y) {
+                    // Если это не хвост, который сейчас исчезнет (актуально для короткой змейки)
+                    // и если змейка уже достаточно длинная, чтобы столкнуться с собой
+                    if (snake.length > initialTailLength) {
+                         gameOver();
+                         return;
+                    }
+                }
+            }
+            
+            // Новая голова
+            const newHead = { x: headX, y: headY };
+            snake.unshift(newHead); // Добавляем голову в начало
+
+            // Проверка на поедание еды
+            if (headX === food.x && headY === food.y) {
+                score++;
+                currentTailLength++;
+                updateScoreDisplay();
+                spawnFood();
+            } else {
+                // Если еда не съедена, удаляем хвост
+                 if (snake.length > currentTailLength) {
+                    snake.pop();
+                }
+            }
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = '#000'; // Черный фон
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawSnake() {
+            snake.forEach((segment, index) => {
+                ctx.fillStyle = index === 0 ? '#00FF00' : '#00AA00'; // Голова ярче
+                ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 1, gridSize - 1); // -1 для сетки
+            });
+        }
+
+        function drawFood() {
+            ctx.fillStyle = '#FF0000'; // Красная еда
+            ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 1, gridSize - 1);
+        }
+
+        function spawnFood() {
+            let newFoodX, newFoodY;
+            let foodOnSnake;
+
+            do {
+                foodOnSnake = false;
+                newFoodX = Math.floor(Math.random() * tileCountX);
+                newFoodY = Math.floor(Math.random() * tileCountY);
+
+                // Проверяем, не появилась ли еда на змейке
+                for (let segment of snake) {
+                    if (segment.x === newFoodX && segment.y === newFoodY) {
+                        foodOnSnake = true;
+                        break;
+                    }
+                }
+            } while (foodOnSnake);
+
+            food = { x: newFoodX, y: newFoodY };
+        }
+
+        function updateScoreDisplay() {
+            scoreEl.textContent = score;
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            clearInterval(gameInterval);
+            finalScoreEl.textContent = score;
+            gameOverScreen.style.display = 'block';
+        }
+
+        function restartGame() {
+            setupCanvas(); // На случай изменения размера окна
+            initGame();
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (!gameRunning && event.key !== "Enter" && event.key !== " ") return;
+
+            if (event.key === "Enter" || event.key === " ") {
+                if (!gameRunning) {
+                    restartGame();
+                    return;
+                }
+            }
+
+            // Предотвращаем разворот на 180 градусов
+            switch (event.key) {
+                case 'ArrowUp':
+                    if (velocityY !== 1) { // Нельзя двигаться вверх, если уже движемся вниз
+                        velocityX = 0;
+                        velocityY = -1;
+                    }
+                    break;
+                case 'ArrowDown':
+                    if (velocityY !== -1) { // Нельзя двигаться вниз, если уже движемся вверх
+                        velocityX = 0;
+                        velocityY = 1;
+                    }
+                    break;
+                case 'ArrowLeft':
+                    if (velocityX !== 1) { // Нельзя двигаться влево, если уже движемся вправо
+                        velocityX = -1;
+                        velocityY = 0;
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (velocityX !== -1) { // Нельзя двигаться вправо, если уже движемся влево
+                        velocityX = 1;
+                        velocityY = 0;
+                    }
+                    break;
+            }
+        });
+        
+        // Начальная настройка и запуск
+        setupCanvas();
+        initGame();
+        // Перенастройка при изменении размера окна (опционально, но полезно)
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (gameRunning) { // Только если игра уже идет, чтобы не сбивать экран "Game Over"
+                    // Можно либо перезапустить игру, либо просто адаптировать, если возможно
+                    // Для змейки проще перезапустить, т.к. размеры поля важны
+                    // gameOver(); // Показать экран Game Over и предложить рестарт
+                    // gameOverScreen.style.display = 'none'; // Скрыть, если хотим "тихий" рестарт
+                    setupCanvas();
+                    initGame(); // или просто setupCanvas() и перерисовать, если не хотим сбрасывать прогресс
+                } else {
+                    setupCanvas(); // Обновить размеры, если игра не запущена (например, на экране Game Over)
+                }
+            }, 250); // Задержка для предотвращения слишком частых вызовов
+        });
+
+    </script>
+</body>
+</html>

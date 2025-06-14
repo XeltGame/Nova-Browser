@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Doodle Jump - Ультра платформы</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #87CEEB;
+        }
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(to bottom, #87CEEB, #E0F7FA);
+            width: 100vw;
+            height: 100vh;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial;
+            font-size: 20px;
+            text-shadow: 1px 1px 2px black;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Высота: <span id="height">0</span></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // 1. Инициализация
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // 2. Игрок (очень большой)
+        const player = {
+            x: canvas.width / 2 - 25,
+            y: canvas.height - 150,
+            width: 50,
+            height: 50,
+            color: '#FF5722',
+            speed: 7,
+            dy: 0,
+            jumpForce: 15,
+            gravity: 0.5,
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                // Лицо
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(this.x + 15, this.y + 15, 5, 0, Math.PI*2);
+                ctx.arc(this.x + this.width - 15, this.y + 15, 5, 0, Math.PI*2);
+                ctx.fill();
+            }
+        };
+
+        // 3. Система платформ (СУПЕР МНОГО)
+        const platforms = [];
+        const PLATFORMS_PER_LEVEL = 2; // 2 платформы на одной высоте
+        const PLATFORM_LEVELS = 100; // 100 уровней = 200 платформ!
+        const MIN_PLATFORM_GAP = 80; // Минимальное расстояние между платформами на одном уровне
+
+        // Генерация платформ
+        function generatePlatforms() {
+            // Стартовая платформа (очень большая)
+            platforms.push({
+                x: canvas.width / 2 - 75,
+                y: canvas.height - 80,
+                width: 150,
+                height: 20,
+                color: '#4CAF50',
+                draw() {
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                    ctx.strokeStyle = '#2E7D32';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(this.x, this.y, this.width, this.height);
+                }
+            });
+
+            // Генерация остальных платформ
+            for (let level = 1; level < PLATFORM_LEVELS; level++) {
+                const yPos = canvas.height - 80 - level * 100;
+                
+                // Первая платформа на уровне
+                platforms.push({
+                    x: Math.random() * (canvas.width/2 - MIN_PLATFORM_GAP - 80),
+                    y: yPos,
+                    width: 70 + Math.random() * 60,
+                    height: 18,
+                    color: level % 4 === 0 ? '#9E9E9E' : '#4CAF50',
+                    draw() {
+                        ctx.fillStyle = this.color;
+                        ctx.fillRect(this.x, this.y, this.width, this.height);
+                        if (this.color === '#4CAF50') {
+                            ctx.strokeStyle = '#2E7D32';
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(this.x, this.y, this.width, this.height);
+                        }
+                    }
+                });
+
+                // Вторая платформа на том же уровне
+                platforms.push({
+                    x: (canvas.width/2 + MIN_PLATFORM_GAP) + Math.random() * (canvas.width/2 - MIN_PLATFORM_GAP - 80),
+                    y: yPos,
+                    width: 70 + Math.random() * 60,
+                    height: 18,
+                    color: level % 5 === 0 ? '#FFC107' : '#4CAF50', // Желтые - пружинные
+                    draw() {
+                        ctx.fillStyle = this.color;
+                        ctx.fillRect(this.x, this.y, this.width, this.height);
+                        if (this.color === '#FFC107') {
+                            ctx.fillStyle = '#795548';
+                            ctx.fillRect(this.x + this.width/2 - 5, this.y + 5, 10, 8);
+                        }
+                    }
+                });
+            }
+        }
+
+        // 4. Управление
+        const keys = {};
+        document.addEventListener('keydown', e => keys[e.key] = true);
+        document.addEventListener('keyup', e => keys[e.key] = false);
+
+        // 5. Игровая логика
+        let score = 0;
+        let cameraOffset = 0;
+
+        function update() {
+            // Движение
+            if (keys['ArrowLeft'] || keys['a']) player.x -= player.speed;
+            if (keys['ArrowRight'] || keys['d']) player.x += player.speed;
+            
+            // Телепортация через края
+            if (player.x < -player.width) player.x = canvas.width;
+            if (player.x > canvas.width) player.x = -player.width;
+            
+            // Гравитация
+            player.dy += player.gravity;
+            player.y += player.dy;
+            
+            // Проверка платформ
+            platforms.forEach(platform => {
+                if (player.y + player.height >= platform.y && 
+                    player.y + player.height <= platform.y + platform.height + 5 &&
+                    player.x + player.width > platform.x && 
+                    player.x < platform.x + platform.width &&
+                    player.dy > 0) {
+                    
+                    // Разные типы платформ
+                    if (platform.color === '#9E9E9E') {
+                        // Исчезающая
+                        player.dy = -player.jumpForce * 0.8;
+                        platform.color = '#F44336';
+                        setTimeout(() => {
+                            const index = platforms.indexOf(platform);
+                            if (index > -1) platforms.splice(index, 1);
+                        }, 200);
+                    } 
+                    else if (platform.color === '#FFC107') {
+                        // Пружинная
+                        player.dy = -player.jumpForce * 1.8;
+                    }
+                    else {
+                        // Обычная
+                        player.dy = -player.jumpForce;
+                    }
+                    
+                    player.y = platform.y - player.height;
+                }
+            });
+            
+            // Система камеры и счета
+            if (player.y < canvas.height / 3) {
+                const diff = canvas.height / 3 - player.y;
+                cameraOffset += diff;
+                score += diff;
+                player.y += diff;
+                platforms.forEach(p => p.y += diff);
+            }
+            
+            document.getElementById('height').textContent = Math.floor(score / 10);
+            
+            // Проигрыш
+            if (player.y > canvas.height + 200) {
+                alert('Game Over! Score: ' + Math.floor(score / 10));
+                resetGame();
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Рисуем только видимые платформы
+            platforms.forEach(platform => {
+                if (platform.y > -50 && platform.y < canvas.height + 50) {
+                    platform.draw();
+                }
+            });
+            
+            player.draw();
+        }
+
+        function resetGame() {
+            platforms.length = 0;
+            generatePlatforms();
+            player.x = canvas.width / 2 - 25;
+            player.y = canvas.height - 150;
+            player.dy = 0;
+            score = 0;
+            cameraOffset = 0;
+        }
+
+        // 6. Запуск игры
+        generatePlatforms();
+        
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>

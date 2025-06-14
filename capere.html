@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Классический Сапёр</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .game-container {
+            background-color: #bbb;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 5px 10px;
+            background-color: #ddd;
+            border-radius: 3px;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(10, 30px);
+            grid-template-rows: repeat(10, 30px);
+            gap: 2px;
+        }
+        .cell {
+            width: 30px;
+            height: 30px;
+            background-color: #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 2px outset #eee;
+            user-select: none;
+        }
+        .revealed {
+            background-color: #ccc;
+            border: 1px solid #999;
+        }
+        .mine {
+            background-color: #ff4444;
+        }
+        .flag {
+            background-color: #ffcc00;
+        }
+        .controls {
+            margin-top: 15px;
+        }
+        button {
+            padding: 8px 15px;
+            font-size: 14px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .number-1 { color: blue; }
+        .number-2 { color: green; }
+        .number-3 { color: red; }
+        .number-4 { color: darkblue; }
+        .number-5 { color: brown; }
+        .number-6 { color: teal; }
+        .number-7 { color: black; }
+        .number-8 { color: gray; }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h2>Сапёр</h2>
+        <div class="info-panel">
+            <div>Флаги: <span id="flags">10</span></div>
+            <div>Время: <span id="time">0</span></div>
+        </div>
+        <div id="board"></div>
+        <div class="controls">
+            <button id="restart">Новая игра</button>
+        </div>
+    </div>
+
+    <script>
+        // Настройки игры
+        const ROWS = 10;
+        const COLS = 10;
+        const MINES = 10;
+        
+        // Состояние игры
+        let board = [];
+        let revealed = [];
+        let flags = [];
+        let gameOver = false;
+        let firstClick = true;
+        let flagCount = MINES;
+        let timer = 0;
+        let timerInterval;
+        
+        // Элементы интерфейса
+        const boardElement = document.getElementById('board');
+        const flagsElement = document.getElementById('flags');
+        const timeElement = document.getElementById('time');
+        const restartButton = document.getElementById('restart');
+        
+        // Инициализация игры
+        function initGame() {
+            // Очистка доски
+            board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+            revealed = Array(ROWS).fill().map(() => Array(COLS).fill(false));
+            flags = Array(ROWS).fill().map(() => Array(COLS).fill(false));
+            gameOver = false;
+            firstClick = true;
+            flagCount = MINES;
+            
+            // Сброс интерфейса
+            flagsElement.textContent = flagCount;
+            timeElement.textContent = '0';
+            clearInterval(timerInterval);
+            timer = 0;
+            boardElement.innerHTML = '';
+            
+            // Создание клеток
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    
+                    // Обработчики событий
+                    cell.addEventListener('click', () => handleLeftClick(r, c));
+                    cell.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        handleRightClick(r, c);
+                    });
+                    
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+        
+        // Расстановка мин после первого клика
+        function placeMines(firstRow, firstCol) {
+            let minesPlaced = 0;
+            
+            // Гарантируем, что первая клетка и соседи не содержат мин
+            const safeZone = [];
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    const nr = firstRow + dr;
+                    const nc = firstCol + dc;
+                    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                        safeZone.push(`${nr},${nc}`);
+                    }
+                }
+            }
+            
+            // Расставляем мины
+            while (minesPlaced < MINES) {
+                const r = Math.floor(Math.random() * ROWS);
+                const c = Math.floor(Math.random() * COLS);
+                
+                // Проверяем, что клетка не в безопасной зоне и еще без мины
+                if (!safeZone.includes(`${r},${c}`) && board[r][c] !== -1) {
+                    board[r][c] = -1; // -1 означает мину
+                    minesPlaced++;
+                    
+                    // Обновляем счетчики соседей
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            const nr = r + dr;
+                            const nc = c + dc;
+                            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc] !== -1) {
+                                board[nr][nc]++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Обработка левого клика (открытие клетки)
+        function handleLeftClick(r, c) {
+            if (gameOver || revealed[r][c] || flags[r][c]) return;
+            
+            // Первый клик - расставляем мины
+            if (firstClick) {
+                placeMines(r, c);
+                firstClick = false;
+                startTimer();
+            }
+            
+            // Проверка на мину
+            if (board[r][c] === -1) {
+                revealAllMines();
+                gameOver = true;
+                clearInterval(timerInterval);
+                return;
+            }
+            
+            // Открываем клетку
+            revealCell(r, c);
+            
+            // Проверка победы
+            checkWin();
+        }
+        
+        // Обработка правого клика (флажок)
+        function handleRightClick(r, c) {
+            if (gameOver || revealed[r][c]) return;
+            
+            // Переключаем флажок
+            flags[r][c] = !flags[r][c];
+            const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+            
+            if (flags[r][c]) {
+                cell.classList.add('flag');
+                cell.textContent = '🚩';
+                flagCount--;
+            } else {
+                cell.classList.remove('flag');
+                cell.textContent = '';
+                flagCount++;
+            }
+            
+            flagsElement.textContent = flagCount;
+        }
+        
+        // Открытие клетки
+        function revealCell(r, c) {
+            if (r < 0 || r >= ROWS || c < 0 || c >= COLS || revealed[r][c] || flags[r][c]) return;
+            
+            revealed[r][c] = true;
+            const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+            cell.classList.add('revealed');
+            
+            // Показываем число мин вокруг или открываем соседей для пустых клеток
+            if (board[r][c] > 0) {
+                cell.textContent = board[r][c];
+                cell.classList.add(`number-${board[r][c]}`);
+            } else if (board[r][c] === 0) {
+                // Рекурсивно открываем соседей для пустых клеток
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        revealCell(r + dr, c + dc);
+                    }
+                }
+            }
+        }
+        
+        // Показать все мины при проигрыше
+        function revealAllMines() {
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (board[r][c] === -1) {
+                        const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+                        cell.classList.add('mine');
+                        cell.textContent = '💣';
+                    }
+                }
+            }
+        }
+        
+        // Проверка победы
+        function checkWin() {
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    // Если есть неоткрытая клетка без мины - игра продолжается
+                    if (board[r][c] !== -1 && !revealed[r][c]) {
+                        return false;
+                    }
+                }
+            }
+            
+            // Все безопасные клетки открыты - победа!
+            gameOver = true;
+            clearInterval(timerInterval);
+            alert('Поздравляем! Вы победили!');
+            return true;
+        }
+        
+        // Таймер
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timer++;
+                timeElement.textContent = timer;
+            }, 1000);
+        }
+        
+        // Кнопка перезапуска
+        restartButton.addEventListener('click', initGame);
+        
+        // Начальная инициализация
+        initGame();
+    </script>
+    <br>
+      <div class="onlyforchrome" style="font-size: 25px;text-align: center;font-family: Helvetica;"><b>Управление:</b></div>
+      <div class="onlyforchrome" style="font-size: 15px;text-align: center;font-family: Helvetica;"><p>ЛКМ - нажать на поле</p><p>ПКМ - поставить флажок</p></div>
+</body>
+</html>

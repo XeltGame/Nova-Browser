@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Игра на память</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        #memory {
+            display: grid;
+            grid-template-columns: repeat(4, 100px);
+            gap: 10px;
+            margin: 20px auto;
+            justify-content: center;
+        }
+        .card {
+            width: 100px;
+            height: 100px;
+            background-color: #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            user-select: none;
+            border-radius: 10px;
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+            position: relative;
+        }
+        .card.flipped {
+            transform: rotateY(180deg);
+        }
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+        }
+        .card-front {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+        }
+        .card-back {
+            background-color: white;
+            transform: rotateY(180deg);
+        }
+        .info {
+            margin: 10px;
+            font-size: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        .win-message {
+            font-size: 24px;
+            color: #4CAF50;
+            font-weight: bold;
+            margin: 20px;
+            height: 30px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Игра на память</h1>
+    <div class="info">
+        Ходы: <span id="moves">0</span> | 
+        Пары: <span id="pairs">0</span>/8 | 
+        Время: <span id="time">0</span> сек
+    </div>
+    <div id="memory"></div>
+    <div class="win-message" id="winMessage"></div>
+    <button id="restart">Новая игра</button>
+
+    <script>
+        // Эмодзи для карточек (8 пар)
+        const cardSymbols = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼'];
+        let gameCards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let moves = 0;
+        let timer = 0;
+        let timerInterval;
+        let canFlip = true;
+
+        const memoryElement = document.getElementById('memory');
+        const movesElement = document.getElementById('moves');
+        const pairsElement = document.getElementById('pairs');
+        const timeElement = document.getElementById('time');
+        const winMessageElement = document.getElementById('winMessage');
+        const restartButton = document.getElementById('restart');
+
+        // Инициализация игры
+        function initGame() {
+            // Создаем пары карточек и перемешиваем
+            gameCards = [...cardSymbols, ...cardSymbols];
+            gameCards.sort(() => Math.random() - 0.5);
+            
+            flippedCards = [];
+            matchedPairs = 0;
+            moves = 0;
+            timer = 0;
+            canFlip = true;
+            
+            movesElement.textContent = '0';
+            pairsElement.textContent = '0/8';
+            timeElement.textContent = '0';
+            winMessageElement.textContent = '';
+            
+            clearInterval(timerInterval);
+            memoryElement.innerHTML = '';
+            
+            // Создаем карточки
+            gameCards.forEach((symbol, index) => {
+                const cardElement = document.createElement('div');
+                cardElement.className = 'card';
+                cardElement.dataset.index = index;
+                cardElement.dataset.value = symbol;
+                
+                cardElement.innerHTML = `
+                    <div class="card-face card-front"></div>
+                    <div class="card-face card-back">${symbol}</div>
+                `;
+                
+                cardElement.addEventListener('click', flipCard);
+                memoryElement.appendChild(cardElement);
+            });
+        }
+
+        // Переворот карточки
+        function flipCard() {
+            if (!canFlip || 
+                flippedCards.length >= 2 || 
+                this.classList.contains('flipped') || 
+                flippedCards.includes(this)) return;
+            
+            this.classList.add('flipped');
+            flippedCards.push(this);
+            
+            // Запускаем таймер при первом ходе
+            if (moves === 0 && flippedCards.length === 1) {
+                timerInterval = setInterval(() => {
+                    timer++;
+                    timeElement.textContent = timer;
+                }, 1000);
+            }
+            
+            // Когда перевернули 2 карточки
+            if (flippedCards.length === 2) {
+                moves++;
+                movesElement.textContent = moves;
+                
+                const card1 = flippedCards[0].dataset.value;
+                const card2 = flippedCards[1].dataset.value;
+                
+                if (card1 === card2) {
+                    // Найдена пара
+                    matchedPairs++;
+                    pairsElement.textContent = `${matchedPairs}/8`;
+                    flippedCards = [];
+                    
+                    // Проверка победы
+                    if (matchedPairs === 8) {
+                        clearInterval(timerInterval);
+                        winMessageElement.textContent = `Вы выиграли за ${moves} ходов и ${timer} секунд!`;
+                    }
+                } else {
+                    // Карточки не совпали
+                    canFlip = false;
+                    setTimeout(() => {
+                        flippedCards.forEach(card => card.classList.remove('flipped'));
+                        flippedCards = [];
+                        canFlip = true;
+                    }, 1000);
+                }
+            }
+        }
+
+        // Кнопка перезапуска
+        restartButton.addEventListener('click', initGame);
+
+        // Начальная инициализация игры
+        initGame();
+    </script>
+</body>
+</html>

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Финансовый Путь</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Чтобы при длинном контенте не центрировалось по вертикали */
+        }
+
+        .game-container {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 800px;
+        }
+
+        h1, h2 {
+            color: #2c3e50;
+            text-align: center;
+        }
+
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            background-color: #eaf2f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+
+        .stats-bar div {
+            background-color: #d4e6f1;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .stats-bar span {
+            font-weight: bold;
+            color: #1a5276;
+        }
+
+        .message-log {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .message-log h2 {
+            margin-top: 0;
+            font-size: 1.2em;
+        }
+
+        #log-list {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        #log-list li {
+            padding: 5px 0;
+            border-bottom: 1px dashed #eee;
+        }
+        #log-list li:last-child {
+            border-bottom: none;
+        }
+        .log-good { color: green; }
+        .log-bad { color: red; }
+        .log-neutral { color: #555; }
+        .log-tip { color: #007bff; font-style: italic;}
+
+
+        .actions {
+            background-color: #f0f9ff;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .actions h2 {
+            margin-top: 0;
+            font-size: 1.2em;
+        }
+
+        .action-group {
+            margin-bottom: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .action-group label {
+            min-width: 120px;
+        }
+
+        input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 100px;
+        }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 1em;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        #next-month-button {
+            background-color: #2ecc71;
+            width: 100%;
+            margin-top: 10px;
+        }
+        #next-month-button:hover {
+            background-color: #27ae60;
+        }
+
+        #study-button {
+            background-color: #f39c12;
+        }
+        #study-button:hover {
+            background-color: #e67e22;
+        }
+
+
+        .hidden {
+            display: none !important;
+        }
+
+        #game-over-screen {
+            text-align: center;
+            padding: 30px;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 5px;
+        }
+        #game-over-screen h2 {
+            color: #856404;
+        }
+        #game-over-screen button {
+            background-color: #007bff;
+        }
+        #game-over-screen button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Финансовый Путь</h1>
+
+        <div class="stats-bar">
+            <div>Месяц: <span id="current-month">1</span> / <span id="total-months">24</span></div>
+            <div>Деньги: <span id="money">1000</span> у.е.</div>
+            <div>Сбережения (банк): <span id="savings">0</span> у.е. (<span id="savings-rate">2</span>%)</div>
+            <div>Акции: <span id="stocks">0</span> у.е.</div>
+            <div>Зарплата: <span id="salary">500</span> у.е.</div>
+            <div>Расходы: <span id="expenses">300</span> у.е.</div>
+        </div>
+
+        <div class="message-log">
+            <h2>События и Советы:</h2>
+            <ul id="log-list">
+                <li>Добро пожаловать в игру! Ваша цель - накопить 50000 у.е.</li>
+            </ul>
+        </div>
+
+        <div class="actions">
+            <h2>Действия в этом месяце:</h2>
+            <div class="action-group">
+                <label for="save-amount">Вложить в банк:</label>
+                <input type="number" id="save-amount" placeholder="Сумма" min="0">
+                <button onclick="depositToSavings()">Вложить</button>
+            </div>
+            <div class="action-group">
+                <label for="withdraw-amount">Снять из банка:</label>
+                <input type="number" id="withdraw-amount" placeholder="Сумма" min="0">
+                <button onclick="withdrawFromSavings()">Снять</button>
+            </div>
+            <div class="action-group">
+                <label for="invest-amount">Купить акции:</label>
+                <input type="number" id="invest-amount" placeholder="Сумма" min="0">
+                <button onclick="buyStocks()">Купить</button>
+            </div>
+            <div class="action-group">
+                <label for="sell-amount">Продать акции:</label>
+                <input type="number" id="sell-amount" placeholder="Сумма" min="0">
+                <button onclick="sellStocks()">Продать</button>
+            </div>
+             <div class="action-group">
+                <button id="study-button" onclick="takeCourse()">Пройти курс обучения (Стоимость: <span id="course-cost">1000</span> у.е., +<span id="salary-increase">100</span> к ЗП)</button>
+            </div>
+            <button id="next-month-button" onclick="nextMonth()">Следующий месяц</button>
+        </div>
+
+        <div id="game-over-screen" class="hidden">
+            <h2 id="game-over-message"></h2>
+            <button onclick="restartGame()">Начать заново</button>
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        let currentMonth = 1;
+        const totalMonths = 24; // Or make it endless until win/lose
+        const winAmount = 50000;
+
+        let money = 1000;
+        let savings = 0;
+        let stocks = 0;
+        let salary = 500;
+        let expenses = 300; // Rent, food, etc.
+        const savingsRate = 0.02; // 2% per year, so per month is ~0.02/12
+
+        let courseCost = 1000;
+        let salaryIncreaseFromCourse = 100;
+        let courseTaken = false;
+
+        // DOM Elements
+        const currentMonthEl = document.getElementById('current-month');
+        const totalMonthsEl = document.getElementById('total-months');
+        const moneyEl = document.getElementById('money');
+        const savingsEl = document.getElementById('savings');
+        const savingsRateEl = document.getElementById('savings-rate');
+        const stocksEl = document.getElementById('stocks');
+        const salaryEl = document.getElementById('salary');
+        const expensesEl = document.getElementById('expenses');
+        const logListEl = document.getElementById('log-list');
+
+        const saveAmountInput = document.getElementById('save-amount');
+        const withdrawAmountInput = document.getElementById('withdraw-amount');
+        const investAmountInput = document.getElementById('invest-amount');
+        const sellAmountInput = document.getElementById('sell-amount');
+
+        const courseCostEl = document.getElementById('course-cost');
+        const salaryIncreaseEl = document.getElementById('salary-increase');
+        const studyButton = document.getElementById('study-button');
+
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const gameOverMessageEl = document.getElementById('game-over-message');
+        const nextMonthButton = document.getElementById('next-month-button');
+        const actionButtons = document.querySelectorAll('.actions button:not(#next-month-button)');
+
+
+        function updateDisplay() {
+            currentMonthEl.textContent = currentMonth;
+            totalMonthsEl.textContent = totalMonths;
+            moneyEl.textContent = Math.round(money);
+            savingsEl.textContent = Math.round(savings);
+            savingsRateEl.textContent = (savingsRate * 100).toFixed(1);
+            stocksEl.textContent = Math.round(stocks);
+            salaryEl.textContent = salary;
+            expensesEl.textContent = expenses;
+
+            courseCostEl.textContent = courseCost;
+            salaryIncreaseEl.textContent = salaryIncreaseFromCourse;
+            studyButton.disabled = courseTaken || money < courseCost;
+            if(courseTaken) {
+                studyButton.textContent = "Курс уже пройден";
+            }
+        }
+
+        function addLog(message, type = "neutral") { // types: good, bad, neutral, tip
+            const listItem = document.createElement('li');
+            listItem.textContent = message;
+            listItem.classList.add(`log-${type}`);
+            logListEl.prepend(listItem); // Add to top
+            if (logListEl.children.length > 10) { // Keep log manageable
+                logListEl.removeChild(logListEl.lastChild);
+            }
+        }
+
+        function depositToSavings() {
+            const amount = parseInt(saveAmountInput.value);
+            if (isNaN(amount) || amount <= 0) {
+                addLog("Введите корректную сумму для вклада.", "bad");
+                return;
+            }
+            if (amount > money) {
+                addLog("Недостаточно денег для вклада.", "bad");
+                return;
+            }
+            money -= amount;
+            savings += amount;
+            addLog(`Вы вложили ${amount} у.е. в банк.`, "good");
+            addLog("Совет: Регулярные сбережения - ключ к финансовой подушке безопасности.", "tip");
+            saveAmountInput.value = "";
+            updateDisplay();
+        }
+
+        function withdrawFromSavings() {
+            const amount = parseInt(withdrawAmountInput.value);
+            if (isNaN(amount) || amount <= 0) {
+                addLog("Введите корректную сумму для снятия.", "bad");
+                return;
+            }
+            if (amount > savings) {
+                addLog("Недостаточно денег на сберегательном счете.", "bad");
+                return;
+            }
+            savings -= amount;
+            money += amount;
+            addLog(`Вы сняли ${amount} у.е. из банка.`, "neutral");
+            withdrawAmountInput.value = "";
+            updateDisplay();
+        }
+
+        function buyStocks() {
+            const amount = parseInt(investAmountInput.value);
+            if (isNaN(amount) || amount <= 0) {
+                addLog("Введите корректную сумму для покупки акций.", "bad");
+                return;
+            }
+            if (amount > money) {
+                addLog("Недостаточно денег для покупки акций.", "bad");
+                return;
+            }
+            money -= amount;
+            stocks += amount;
+            addLog(`Вы купили акций на ${amount} у.е.`, "good");
+            addLog("Совет: Инвестиции в акции могут быть доходными, но и рискованными. Диверсифицируйте!", "tip");
+            investAmountInput.value = "";
+            updateDisplay();
+        }
+
+        function sellStocks() {
+            const amount = parseInt(sellAmountInput.value);
+            if (isNaN(amount) || amount <= 0) {
+                addLog("Введите корректную сумму для продажи акций.", "bad");
+                return;
+            }
+            if (amount > stocks) {
+                addLog("У вас нет столько акций для продажи.", "bad");
+                return;
+            }
+            stocks -= amount;
+            money += amount; // For simplicity, selling at face value. Real game would fluctuate.
+            addLog(`Вы продали акций на ${amount} у.е.`, "neutral");
+            sellAmountInput.value = "";
+            updateDisplay();
+        }
+
+        function takeCourse() {
+            if (courseTaken) {
+                addLog("Вы уже прошли этот курс.", "neutral");
+                return;
+            }
+            if (money >= courseCost) {
+                money -= courseCost;
+                salary += salaryIncreaseFromCourse;
+                courseTaken = true;
+                addLog(`Вы прошли курс! Ваша зарплата увеличена на ${salaryIncreaseFromCourse} у.е.`, "good");
+                addLog("Совет: Инвестиции в себя и свои навыки часто приносят лучший доход.", "tip");
+                updateDisplay();
+            } else {
+                addLog("Недостаточно денег для прохождения курса.", "bad");
+            }
+        }
+
+
+        function processMonthEnd() {
+            // 1. Income
+            money += salary;
+            addLog(`Получена зарплата: +${salary} у.е.`, "good");
+
+            // 2. Expenses
+            money -= expenses;
+            addLog(`Оплачены ежемесячные расходы: -${expenses} у.е.`, "bad");
+
+            // 3. Savings interest (simplified monthly)
+            const interestEarned = savings * (savingsRate / 12);
+            savings += interestEarned;
+            if (interestEarned > 0) {
+               addLog(`Начислены проценты по вкладу: +${Math.round(interestEarned)} у.е.`, "good");
+            }
+
+            // 4. Stock market fluctuation (simple random)
+            if (stocks > 0) {
+                const fluctuation = (Math.random() - 0.45) * 0.15; // From -4.5% to +10.5% approx
+                const change = stocks * fluctuation;
+                stocks += change;
+                if (change > 0) {
+                    addLog(`Акции выросли в цене на ${Math.round(change)} у.е.`, "good");
+                } else if (change < 0) {
+                    addLog(`Акции упали в цене на ${Math.round(Math.abs(change))} у.е.`, "bad");
+                }
+                if (stocks < 0) stocks = 0; // Prevent negative stocks due to large drop
+            }
+
+            // 5. Random Events
+            const randomEventChance = Math.random();
+            if (randomEventChance < 0.1) { // 10% chance of bad event
+                const badEvents = [
+                    { text: "Сломалась бытовая техника. Ремонт: -150 у.е.", cost: 150, tip: "Совет: Имейте резервный фонд на случай непредвиденных расходов." },
+                    { text: "Неожиданный визит к врачу: -200 у.е.", cost: 200, tip: "Совет: Медицинская страховка может помочь снизить такие риски." },
+                    { text: "Небольшой экономический спад. Ваши акции немного подешевели.", cost: 0, stockImpact: -0.05, tip: "Совет: Не паникуйте при краткосрочных колебаниях рынка, если у вас долгосрочная стратегия." }
+                ];
+                const event = badEvents[Math.floor(Math.random() * badEvents.length)];
+                addLog(event.text, "bad");
+                if (event.cost) money -= event.cost;
+                if (event.stockImpact && stocks > 0) {
+                    let stockLoss = stocks * event.stockImpact;
+                    stocks += stockLoss; // stockImpact is negative
+                    if (stocks < 0) stocks = 0;
+                }
+                if (event.tip) addLog(event.tip, "tip");
+
+            } else if (randomEventChance < 0.2) { // Another 10% chance of good event (total 10% bad, 10% good)
+                 const goodEvents = [
+                    { text: "Премия на работе! +250 у.е.", gain: 250, tip: "Совет: Часть неожиданных доходов можно направить на инвестиции или погашение долгов." },
+                    { text: "Нашли старую заначку: +100 у.е.", gain: 100, tip: "Совет: Даже небольшие суммы, регулярно откладываемые, со временем превращаются в капитал." },
+                    { text: "Рынок акций растет! Ваши акции немного подорожали.", gain: 0, stockImpact: 0.08, tip: "Совет: Фиксируйте прибыль или реинвестируйте, в зависимости от вашей стратегии." }
+                ];
+                const event = goodEvents[Math.floor(Math.random() * goodEvents.length)];
+                addLog(event.text, "good");
+                if (event.gain) money += event.gain;
+                if (event.stockImpact && stocks > 0) {
+                     let stockGain = stocks * event.stockImpact;
+                     stocks += stockGain;
+                }
+                if (event.tip) addLog(event.tip, "tip");
+            }
+
+
+            currentMonth++;
+        }
+        
+        let totalCapital = 0; // Moved declaration outside to be accessible in gameOver
+
+        function checkWinLossConditions() {
+            totalCapital = money + savings + stocks; // Recalculate here
+            if (totalCapital >= winAmount) {
+                gameOver(`Поздравляем! Вы достигли цели в ${winAmount} у.е. за ${currentMonth -1} месяцев! Ваш капитал: ${Math.round(totalCapital)} у.е.`);
+                return true;
+            }
+            if (money < 0 && savings <= 0 && stocks <=0) { // More robust bankruptcy check
+                gameOver(`Игра окончена. Вы обанкротились! Месяц ${currentMonth - 1}.`);
+                return true;
+            }
+            if (currentMonth > totalMonths) {
+                gameOver(`Игра окончена. Время вышло! Месяц ${currentMonth - 1}. Ваш капитал: ${Math.round(totalCapital)} у.е.`);
+                return true;
+            }
+            return false;
+        }
+
+        function gameOver(message) {
+            gameOverMessageEl.textContent = message;
+            gameOverScreen.classList.remove('hidden');
+            nextMonthButton.disabled = true;
+            actionButtons.forEach(button => button.disabled = true);
+            document.querySelectorAll('.actions input').forEach(input => input.disabled = true);
+            // Use the already calculated totalCapital from checkWinLossConditions
+            addLog(message, (money + savings + stocks) >= winAmount ? "good" : "bad");
+        }
+
+
+        function nextMonth() {
+            processMonthEnd();
+            updateDisplay(); // Update display before checking win/loss to show final numbers of the month
+            if (!checkWinLossConditions()) {
+                addLog(`--- Наступил ${currentMonth}-й месяц ---`, "neutral");
+            }
+        }
+
+        function restartGame() {
+            currentMonth = 1;
+            money = 1000;
+            savings = 0;
+            stocks = 0;
+            salary = 500; // Reset salary if it was changed by courses
+            expenses = 300;
+            courseTaken = false;
+            totalCapital = 0; // Reset total capital
+
+            logListEl.innerHTML = '<li>Добро пожаловать в игру! Ваша цель - накопить 50000 у.е.</li>';
+            gameOverScreen.classList.add('hidden');
+            nextMonthButton.disabled = false;
+            actionButtons.forEach(button => button.disabled = false);
+            document.querySelectorAll('.actions input').forEach(input => {
+                input.disabled = false;
+                input.value = '';
+            });
+            studyButton.textContent = `Пройти курс обучения (Стоимость: ${courseCost} у.е., +${salaryIncreaseFromCourse} к ЗП)`;
+
+
+            updateDisplay();
+             addLog("Игра перезапущена. Удачи!", "neutral");
+        }
+
+        // Initial setup
+        updateDisplay();
+        addLog("Совет: Старайтесь ежемесячно откладывать часть дохода на сбережения или инвестиции.", "tip");
+    </script>
+</body>
+</html>

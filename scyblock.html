@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>SkyBlock 2D</title>
+    <style>
+        body {
+            margin: 0;
+            background: linear-gradient(to bottom, #1e90ff, #87ceeb);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+
+        #gameContainer {
+            position: relative;
+            margin-top: 20px;
+        }
+
+        #gameCanvas {
+            border: 4px solid #2c3e50;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+
+        #ui {
+            background: rgba(44, 62, 80, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            width: 800px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .inventory {
+            display: flex;
+            gap: 15px;
+        }
+
+        .item {
+            padding: 8px;
+            border-radius: 4px;
+            background: rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .item:hover {
+            background: rgba(0,0,0,0.4);
+        }
+
+        .item.selected {
+            background: #e74c3c;
+        }
+
+        #stats {
+            font-size: 18px;
+        }
+
+        #tutorial {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+        }
+
+        button {
+            background: #e74c3c;
+            border: none;
+            padding: 10px 20px;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: #c0392b;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui">
+            <div class="inventory">
+                <div class="item selected" data-block="dirt">🟫 Земля: <span id="dirtCount">5</span></div>
+                <div class="item" data-block="stone">⬜ Камень: <span id="stoneCount">3</span></div>
+                <div class="item" data-block="wood">🟫 Дерево: <span id="woodCount">2</span></div>
+                <div class="item" data-block="sapling">🌱 Саженец: <span id="saplingCount">1</span></div>
+            </div>
+            <div id="stats">
+                День: <span id="dayCount">1</span>
+                Время: <span id="timeOfDay">☀️</span>
+            </div>
+        </div>
+        <div id="tutorial">
+            <h2>Как играть</h2>
+            <p>WASD или стрелки - движение</p>
+            <p>ЛКМ - поставить блок</p>
+            <p>ПКМ - сломать блок</p>
+            <p>1-4 - выбор блока</p>
+            <button onclick="startGame()">Начать игру</button>
+        </div>
+        <div id="gameOver">
+            <h2>Игра окончена!</h2>
+            <p>Вы продержались <span id="survivalDays">0</span> дней</p>
+            <button onclick="window.location.reload()">Начать заново</button>
+        </div>
+    </div>
+
+    <script>
+        // Добавьте эти константы в начало скрипта
+        const FALLING_BLOCK_SIZE = 16; // Размер падающих блоков
+        const SAPLING_GROWTH_TIME = 10000; // Время роста саженца (10 секунд)
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const BLOCK_SIZE = 32;
+        const GRAVITY = 0.5;
+        const JUMP_FORCE = -10;
+        const TREE_HEIGHT = 3;
+        const METEOR_CHANCE = 0.001; // Шанс появления метеорита (0.1%)
+        const CAMERA_SPEED = 5; // Скорость движения камеры
+        const WORLD_CHUNK_SIZE = 16; // Размер чанка мира
+
+        let game = {
+    player: {
+        x: canvas.width / 2 - BLOCK_SIZE / 2,
+        y: canvas.height / 2 - BLOCK_SIZE * 2,
+        vx: 0,
+        vy: 0,
+        width: BLOCK_SIZE,
+        height: BLOCK_SIZE,
+        isJumping: false
+    },
+    blocks: [{
+        x: canvas.width / 2 - BLOCK_SIZE / 2,
+        y: canvas.height / 2 - BLOCK_SIZE,
+        type: 'grass'
+    }],
+    fallingBlocks: [],
+    lastBlockSpawn: 0,
+    blockSpawnInterval: 3000,
+    inventory: {
+        dirt: 5,
+        stone: 3,
+        wood: 2,
+        sapling: 1
+    },
+    selectedBlock: 'dirt',
+    camera: {
+        x: 0,
+        y: 0
+    },
+    day: 1,
+    time: 0,
+    isNight: false,
+    gameOver: false
+};
+
+let isMouseDown = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+canvas.addEventListener('mousedown', (e) => {
+    if (game.gameOver) return;
+
+    isMouseDown = true;
+    const rect = canvas.getBoundingClientRect();
+    lastMouseX = e.clientX - rect.left;
+    lastMouseY = e.clientY - rect.top;
+
+    if (e.button === 0) { // ЛКМ
+        placeBlock(lastMouseX, lastMouseY);
+    } else if (e.button === 2) { // ПКМ
+        removeBlock(lastMouseX, lastMouseY);
+    }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    if (isMouseDown && !game.gameOver) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Размещаем или удаляем блоки при перетаскивании мыши
+        if (e.buttons === 1) { // ЛКМ
+            placeBlock(mouseX, mouseY);
+        } else if (e.buttons === 2) { // ПКМ
+            removeBlock(mouseX, mouseY);
+        }
+
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
+    }
+});
+
+canvas.addEventListener('mouseup', () => {
+    isMouseDown = false;
+});
+
+// Убираем обновление UI для инвентаря, так как он теперь не нужен
+function updateUI() {
+    document.getElementById('dayCount').textContent = game.day;
+    document.getElementById('timeOfDay').textContent = game.isNight ? '🌙' : '☀️';
+}
+
+
+function getBlockColor(type) {
+    const colors = {
+        dirt: '#8B4513',
+        stone: '#808080',
+        wood: '#654321',
+        grass: '#228B22',
+        sapling: '#90EE90',
+        meteor: '#FF4500' // Цвет метеорита
+    };
+    return colors[type] || '#FFF';
+}
+
+function spawnMeteor() {
+    if (Math.random() < METEOR_CHANCE) {
+        game.fallingBlocks.push({
+            x: Math.random() * (canvas.width - FALLING_BLOCK_SIZE) + game.camera.x,
+            y: -FALLING_BLOCK_SIZE + game.camera.y,
+            vy: 5,
+            type: 'meteor',
+            size: FALLING_BLOCK_SIZE * 2,
+            isMeteor: true
+        });
+    }
+}
+
+function drawBlock(x, y, type, size = BLOCK_SIZE, isBonus = false, alpha = 1) {
+    ctx.save();
+    
+    if (isBonus) {
+        ctx.shadowColor = 'yellow';
+        ctx.shadowBlur = 10;
+    }
+
+    if (type === 'meteor') {
+        ctx.shadowColor = '#FF0000';
+        ctx.shadowBlur = 20;
+    }
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = getBlockColor(type);
+    ctx.fillRect(x, y, size, size);
+    ctx.strokeStyle = '#000';
+    ctx.strokeRect(x, y, size, size);
+
+    if (type === 'meteor') {
+        // Добавляем эффект огня для метеорита
+        ctx.fillStyle = '#FF8C00';
+        ctx.beginPath();
+        ctx.moveTo(x + size/2, y);
+        ctx.lineTo(x + size, y + size/2);
+        ctx.lineTo(x + size/2, y + size);
+        ctx.lineTo(x, y + size/2);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+function updatePlayer() {
+    // Гравитация
+    game.player.vy += GRAVITY;
+    
+    // Сохраняем текущую позицию
+    const nextX = game.player.x + game.player.vx;
+    const nextY = game.player.y + game.player.vy;
+
+    // Проверяем коллизии по X
+    let canMoveX = true;
+    game.blocks.forEach(block => {
+        if (checkCollision({
+            x: nextX,
+            y: game.player.y,
+            width: game.player.width,
+            height: game.player.height
+        }, block)) {
+            canMoveX = false;
+        }
+    });
+
+    // Проверяем коллизии по Y
+    let canMoveY = true;
+    game.blocks.forEach(block => {
+        if (checkCollision({
+            x: game.player.x,
+            y: nextY,
+            width: game.player.width,
+            height: game.player.height
+        }, block)) {
+            canMoveY = false;
+            if (game.player.vy > 0) {
+                game.player.y = block.y - game.player.height;
+                game.player.vy = 0;
+                game.player.isJumping = false;
+            } else if (game.player.vy < 0) {
+                game.player.y = block.y + BLOCK_SIZE;
+                game.player.vy = 0;
+            }
+        }
+    });
+
+    // Применяем движение только если нет коллизий
+    if (canMoveX) {
+        game.player.x = nextX;
+    }
+    if (canMoveY) {
+        game.player.y = nextY;
+    }
+
+    // Проверка на падение
+    if (game.player.y > canvas.height) {
+        gameOver();
+    }
+}
+
+function drawPlayer() {
+    ctx.fillStyle = '#FF0000';
+    ctx.fillRect(
+        game.player.x,
+        game.player.y,
+        game.player.width,
+        game.player.height
+    );
+}
+        function checkCollision(player, block) {
+            return player.x < block.x + BLOCK_SIZE &&
+                   player.x + player.width > block.x &&
+                   player.y < block.y + BLOCK_SIZE &&
+                   player.y + player.height > block.y;
+        }
+
+        function updateGame() {
+    if (game.gameOver) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Обновляем позицию камеры, чтобы следовать за игроком
+    game.camera.x = game.player.x - canvas.width / 2;
+    game.camera.y = game.player.y - canvas.height / 2;
+
+    // Применяем смещение камеры
+    ctx.save();
+    ctx.translate(-game.camera.x, -game.camera.y);
+
+    // Фон
+    ctx.fillStyle = game.isNight ? '#001' : '#87CEEB';
+    ctx.fillRect(game.camera.x, game.camera.y, canvas.width, canvas.height);
+
+    // Спавн и обновление падающих блоков
+    spawnFallingBlock();
+    spawnMeteor();
+    updateFallingBlocks();
+    updateSaplings();
+
+    // Отрисовка всех блоков в видимой области
+    game.blocks.forEach(block => {
+        if (isBlockVisible(block)) {
+            drawBlock(block.x, block.y, block.type);
+        }
+    });
+
+    game.fallingBlocks.forEach(block => {
+        if (isBlockVisible(block)) {
+            if (block.isMeteor) {
+                ctx.shadowColor = '#FF0000';
+                ctx.shadowBlur = 20;
+            }
+            drawBlock(block.x, block.y, block.type, block.size, block.isBonus);
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+        }
+    });
+
+    updatePlayer();
+    drawPlayer();
+
+    ctx.restore();
+
+    requestAnimationFrame(updateGame);
+}
+
+// Добавьте функцию проверки видимости блока
+function isBlockVisible(block) {
+    return block.x + BLOCK_SIZE >= game.camera.x &&
+           block.x <= game.camera.x + canvas.width &&
+           block.y + BLOCK_SIZE >= game.camera.y &&
+           block.y <= game.camera.y + canvas.height;
+}
+
+function updateUI() {
+    document.getElementById('dirtCount').textContent = game.inventory.dirt;
+    document.getElementById('stoneCount').textContent = game.inventory.stone;
+    document.getElementById('woodCount').textContent = game.inventory.wood;
+    document.getElementById('saplingCount').textContent = game.inventory.sapling;
+    document.getElementById('dayCount').textContent = game.day;
+    document.getElementById('timeOfDay').textContent = game.isNight ? '🌙' : '☀️';
+}
+
+function placeBlock(screenX, screenY) {
+    if (game.inventory[game.selectedBlock] > 0) {
+        // Преобразуем координаты экрана в координаты мира
+        const worldX = screenX + game.camera.x;
+        const worldY = screenY + game.camera.y;
+        
+        // Округляем до сетки блоков
+        const blockX = Math.floor(worldX / BLOCK_SIZE) * BLOCK_SIZE;
+        const blockY = Math.floor(worldY / BLOCK_SIZE) * BLOCK_SIZE;
+        
+        // Проверяем, нет ли уже блока в этой позиции
+        const blockExists = game.blocks.some(block => 
+            block.x === blockX && block.y === blockY
+        );
+
+        // Проверяем, не пересекается ли новый блок с игроком
+        const wouldCollideWithPlayer = checkCollision(game.player, {
+            x: blockX,
+            y: blockY,
+            width: BLOCK_SIZE,
+            height: BLOCK_SIZE
+        });
+
+        if (!blockExists && !wouldCollideWithPlayer) {
+            if (game.selectedBlock === 'sapling') {
+                game.blocks.push({
+                    x: blockX,
+                    y: blockY,
+                    type: 'sapling',
+                    plantTime: Date.now()
+                });
+            } else {
+                game.blocks.push({
+                    x: blockX,
+                    y: blockY,
+                    type: game.selectedBlock
+                });
+            }
+            game.inventory[game.selectedBlock]--;
+            updateUI();
+        }
+    }
+}
+
+function updateSaplings() {
+    for (let i = 0; i < game.blocks.length; i++) {
+        const block = game.blocks[i];
+        if (block.type === 'sapling' && block.plantTime) {
+            const now = Date.now();
+            if (now - block.plantTime >= SAPLING_GROWTH_TIME) {
+                // Удаляем саженец
+                game.blocks.splice(i, 1);
+                
+                // Создаем дерево
+                createTree(block.x, block.y);
+                
+                // Создаем выпадающие блоки дерева
+                dropWoodBlocks(block.x, block.y);
+            }
+        }
+    }
+}
+        
+
+
+function removeBlock(screenX, screenY) {
+    // Преобразуем координаты экрана в координаты мира
+    const worldX = screenX + game.camera.x;
+    const worldY = screenY + game.camera.y;
+    
+    const blockX = Math.floor(worldX / BLOCK_SIZE) * BLOCK_SIZE;
+    const blockY = Math.floor(worldY / BLOCK_SIZE) * BLOCK_SIZE;
+    
+    const index = game.blocks.findIndex(block =>
+        block.x === blockX && block.y === blockY
+    );
+    
+    if (index !== -1) {
+        const block = game.blocks[index];
+        if (block.type !== 'grass') {
+            game.inventory[block.type]++;
+            game.blocks.splice(index, 1);
+            updateUI();
+        }
+    }
+}
+
+function gameOver() {
+    game.gameOver = true;
+    document.getElementById('survivalDays').textContent = game.day;
+    document.getElementById('gameOver').style.display = 'block';
+}
+
+
+function restartGame() {
+    window.location.reload();
+}
+
+        // Обработка ввода
+        document.addEventListener('keydown', (e) => {
+    if (game.gameOver) return;
+
+    switch(e.key) {
+        case 'ArrowLeft':
+        case 'a':
+            game.player.vx = -5;
+            break;
+        case 'ArrowRight':
+        case 'd':
+            game.player.vx = 5;
+            break;
+        case 'ArrowUp':
+        case 'w':
+            if (!game.player.isJumping) {
+                game.player.vy = JUMP_FORCE;
+                game.player.isJumping = true;
+            }
+            break;
+        case '1':
+            game.selectedBlock = 'dirt';
+            break;
+        case '2':
+            game.selectedBlock = 'stone';
+            break;
+        case '3':
+            game.selectedBlock = 'wood';
+            break;
+        case '4':
+            game.selectedBlock = 'sapling';
+            break;
+    }
+
+    // Обновляем выделение в UI
+    document.querySelectorAll('.item').forEach(item => {
+        item.classList.remove('selected');
+        if (item.dataset.block === game.selectedBlock) {
+            item.classList.add('selected');
+        }
+    });
+});;
+
+        document.addEventListener('keyup', (e) => {
+            if (['ArrowLeft', 'ArrowRight', 'a', 'd'].includes(e.key)) {
+                game.player.vx = 0;
+            }
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (game.gameOver) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (e.button === 0) { // ЛКМ
+                placeBlock(x, y);
+            } else if (e.button === 2) { // ПКМ
+                removeBlock(x, y);
+            }
+        });
+
+        // Предотвращаем контекстное меню при ПКМ
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Выбор блока через клик по инвентарю
+        document.querySelectorAll('.item').forEach(item => {
+            item.addEventListener('click', () => {
+                game.selectedBlock = item.dataset.block;
+                document.querySelectorAll('.item').forEach(i => i.classList.remove('selected'));
+                item.classList.add('selected');
+            });
+        });
+
+        function startGame() {
+            document.getElementById('tutorial').style.display = 'none';
+            updateGame();
+        }
+
+        // Показываем туториал при загрузке
+        document.getElementById('tutorial').style.display = 'block';
+
+        function spawnFallingBlock() {
+    const now = Date.now();
+    if (now - game.lastBlockSpawn > game.blockSpawnInterval) {
+        game.lastBlockSpawn = now;
+        const blockTypes = ['dirt', 'stone', 'wood', 'sapling'];
+        game.fallingBlocks.push({
+            x: Math.random() * canvas.width + game.camera.x,
+            y: game.camera.y - FALLING_BLOCK_SIZE,
+            vy: 2,
+            type: blockTypes[Math.floor(Math.random() * blockTypes.length)],
+            size: FALLING_BLOCK_SIZE
+        });
+    }
+}
+
+// Модифицированная функция updateFallingBlocks
+function updateFallingBlocks() {
+    for (let i = game.fallingBlocks.length - 1; i >= 0; i--) {
+        const block = game.fallingBlocks[i];
+        
+        if (!block.hasCollided) {
+            block.y += block.vy;
+            if (block.isExplosion) {
+                block.x += block.vx;
+                block.vy += 0.1; // Добавляем гравитацию для частиц
+            }
+        }
+
+        if (block.isBonus) {
+            block.x += Math.sin(Date.now() / 200) * 1;
+        }
+
+        // Проверяем столкновение с игроком
+        if (checkCollisionWithFallingBlock(game.player, block)) {
+            if (!block.isMeteor && !block.isExplosion) {
+                // Добавляем случайное количество блоков (3-5)
+                const amount = Math.floor(Math.random() * 3) + 3;
+                game.inventory[block.type] += amount;
+                game.fallingBlocks.splice(i, 1);
+                updateUI();
+            }
+            continue;
+        }
+
+        // Проверяем столкновение с блоками
+        let hasCollided = false;
+        for (const staticBlock of game.blocks) {
+            if (checkCollisionBetweenBlocks(block, staticBlock)) {
+                if (block.isMeteor) {
+                    // Создаем взрыв метеорита
+                    createMeteorExplosion(block.x, block.y);
+                    game.fallingBlocks.splice(i, 1);
+                } else if (!block.isExplosion) {
+                    block.hasCollided = true;
+                }
+                hasCollided = true;
+                break;
+            }
+        }
+
+        // Обновляем частицы взрыва
+        if (block.isExplosion) {
+            block.lifetime--;
+            block.alpha = block.lifetime / 30;
+            
+            if (block.lifetime <= 0) {
+                game.fallingBlocks.splice(i, 1);
+            }
+        }
+
+        // Удаляем блоки, упавшие за пределы экрана
+        if (!hasCollided && block.y > canvas.height + game.camera.y) {
+            game.fallingBlocks.splice(i, 1);
+        }
+    }
+}
+
+function createMeteorExplosion(meteorX, meteorY) {
+    // Случайное количество блоков для уничтожения (от 4 до 8)
+    const destructionRadius = Math.floor(Math.random() * 5) + 4;
+    
+    // Создаем временный массив для хранения блоков для удаления
+    const blocksToRemove = [];
+    
+    // Проверяем все блоки в радиусе взрыва
+    game.blocks.forEach((block, index) => {
+        const distance = Math.sqrt(
+            Math.pow(block.x - meteorX, 2) + 
+            Math.pow(block.y - meteorY, 2)
+        );
+        
+        // Если блок в радиусе взрыва и это не трава
+        if (distance < BLOCK_SIZE * 3 && block.type !== 'grass') {
+            blocksToRemove.push(index);
+        }
+    });
+    
+    // Ограничиваем количество удаляемых блоков
+    blocksToRemove.sort(() => Math.random() - 0.5); // Перемешиваем массив
+    blocksToRemove.splice(destructionRadius); // Оставляем только нужное количество блоков
+    
+    // Удаляем блоки (в обратном порядке, чтобы индексы не сбивались)
+    blocksToRemove.sort((a, b) => b - a).forEach(index => {
+        // Добавляем эффект взрыва
+        createExplosionEffect(game.blocks[index].x, game.blocks[index].y);
+        game.blocks.splice(index, 1);
+    });
+}
+
+function createExplosionEffect(x, y) {
+    // Создаем частицы взрыва
+    for (let i = 0; i < 10; i++) {
+        const angle = (Math.PI * 2 / 10) * i;
+        const speed = 3 + Math.random() * 3;
+        
+        game.fallingBlocks.push({
+            x: x,
+            y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 2, // Начальная скорость вверх
+            type: 'meteor',
+            size: FALLING_BLOCK_SIZE / 2,
+            isExplosion: true,
+            lifetime: 60, // Увеличиваем время жизни частиц
+            alpha: 1
+        });
+    }
+}
+
+function checkCollisionBetweenBlocks(block1, block2) {
+    return block1.x < block2.x + BLOCK_SIZE &&
+           block1.x + block1.size > block2.x &&
+           block1.y < block2.y + BLOCK_SIZE &&
+           block1.y + block1.size > block2.y;
+}
+
+function checkCollisionWithFallingBlock(player, block) {
+    return player.x < block.x + block.size &&
+           player.x + player.width > block.x &&
+           player.y < block.y + block.size &&
+           player.y + player.height > block.y;
+}
+function createTree(x, y) {
+    // Создаем ствол дерева
+    for (let i = 0; i < TREE_HEIGHT; i++) {
+        game.blocks.push({
+            x: x,
+            y: y - (i * BLOCK_SIZE),
+            type: 'wood'
+        });
+    }
+}
+
+function dropWoodBlocks(x, y) {
+    // Случайное количество блоков от 3 до 6
+    const numBlocks = Math.floor(Math.random() * 4) + 3;
+    
+    for (let i = 0; i < numBlocks; i++) {
+        // Добавляем случайное смещение для разброса блоков
+        const offsetX = (Math.random() - 0.5) * BLOCK_SIZE * 2;
+        
+        game.fallingBlocks.push({
+            x: x + offsetX,
+            y: y - BLOCK_SIZE * TREE_HEIGHT,
+            vy: 2 + Math.random() * 2,
+            type: 'wood',
+            size: FALLING_BLOCK_SIZE,
+            isBonus: true
+        });
+    }
+}
+
+    </script>
+</body>
+</html>

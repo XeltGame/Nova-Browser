@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Угадай число</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        input, button {
+            padding: 10px;
+            font-size: 16px;
+        }
+        #message {
+            color: green;
+            font-weight: bold;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Угадай число от 1 до 100</h1>
+    <input type="number" id="guess" min="1" max="100">
+    <button onclick="checkGuess()">Проверить</button>
+    <p id="message"></p>
+    <p>Попыток: <span id="attempts">0</span></p>
+
+    <script>
+        let secretNumber = Math.floor(Math.random() * 100) + 1;
+        let attempts = 0;
+
+        function checkGuess() {
+            const guess = parseInt(document.getElementById('guess').value);
+            const message = document.getElementById('message');
+            attempts++;
+            document.getElementById('attempts').textContent = attempts;
+
+            if (guess === secretNumber) {
+                message.textContent = `Поздравляю! Вы угадали число за ${attempts} попыток.`;
+                message.style.color = 'green';
+                document.getElementById('guess').disabled = true;
+            } else if (guess < secretNumber) {
+                message.textContent = "Слишком мало! Попробуйте больше.";
+                message.style.color = 'red';
+            } else {
+                message.textContent = "Слишком много! Попробуйте меньше.";
+                message.style.color = 'red';
+            }
+        }
+    </script>
+</body>
+</html>

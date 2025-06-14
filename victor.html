@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Угадай Столицу - Викторина</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .quiz-container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 25px;
+            font-size: 2em;
+        }
+
+        #question-area h2 {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #34495e;
+        }
+
+        .options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .option-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 15px;
+            font-size: 1em;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+
+        .option-btn:hover:not(:disabled) {
+            background-color: #2980b9;
+        }
+
+        .option-btn:active:not(:disabled) {
+            transform: translateY(1px);
+        }
+
+        .option-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .option-btn.correct {
+            background-color: #2ecc71;
+        }
+
+        .option-btn.incorrect {
+            background-color: #e74c3c;
+        }
+
+        #feedback {
+            margin-top: 15px;
+            font-size: 1.1em;
+            font-weight: bold;
+            min-height: 25px; /* Резервируем место, чтобы не прыгало */
+        }
+
+        #score-area {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #7f8c8d;
+        }
+        
+        #score-area span {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        #next-question-btn, #restart-btn {
+            background-color: #9b59b6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1em;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background-color 0.2s ease;
+        }
+
+        #next-question-btn:hover, #restart-btn:hover {
+            background-color: #8e44ad;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.8em;
+            }
+            .quiz-container {
+                padding: 20px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="quiz-container">
+        <h1>Угадай Столицу!</h1>
+
+        <div id="question-area">
+            <h2 id="country-name">Страна?</h2>
+            <div class="options-container" id="options-container">
+                <!-- Кнопки с вариантами будут здесь -->
+            </div>
+        </div>
+
+        <div id="feedback"></div>
+
+        <button id="next-question-btn" class="hidden">Следующий вопрос</button>
+        
+        <div id="score-area">
+            Счет: <span id="score">0</span> | Вопрос: <span id="question-number">0</span>/<span id="total-questions">0</span>
+        </div>
+
+        <div id="game-over-area" class="hidden">
+            <h2>Игра окончена!</h2>
+            <p id="final-score"></p>
+            <button id="restart-btn">Начать заново</button>
+        </div>
+    </div>
+
+    <script>
+        const questions = [
+            { country: "Франция", capital: "Париж", options: ["Лондон", "Берлин", "Мадрид"] },
+            { country: "Германия", capital: "Берлин", options: ["Вена", "Прага", "Варшава"] },
+            { country: "Италия", capital: "Рим", options: ["Афины", "Лиссабон", "Тирана"] },
+            { country: "Япония", capital: "Токио", options: ["Сеул", "Пекин", "Бангкок"] },
+            { country: "Канада", capital: "Оттава", options: ["Вашингтон", "Торонто", "Монреаль"] },
+            { country: "Австралия", capital: "Канберра", options: ["Сидней", "Мельбурн", "Веллингтон"] },
+            { country: "Бразилия", capital: "Бразилиа", options: ["Рио-де-Жанейро", "Сан-Паулу", "Буэнос-Айрес"] },
+            { country: "Египет", capital: "Каир", options: ["Стамбул", "Тунис", "Алжир"] },
+            { country: "Индия", capital: "Нью-Дели", options: ["Мумбаи", "Калькутта", "Исламабад"] },
+            { country: "Китай", capital: "Пекин", options: ["Шанхай", "Гонконг", "Тайбэй"] }
+        ];
+
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let shuffledQuestions = [];
+
+        const countryNameEl = document.getElementById('country-name');
+        const optionsContainerEl = document.getElementById('options-container');
+        const feedbackEl = document.getElementById('feedback');
+        const scoreEl = document.getElementById('score');
+        const questionNumberEl = document.getElementById('question-number');
+        const totalQuestionsEl = document.getElementById('total-questions');
+        const nextQuestionBtn = document.getElementById('next-question-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const questionAreaEl = document.getElementById('question-area');
+        const gameOverAreaEl = document.getElementById('game-over-area');
+        const finalScoreEl = document.getElementById('final-score');
+        const scoreAreaEl = document.getElementById('score-area');
+
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function startGame() {
+            shuffledQuestions = shuffleArray([...questions]); // Копируем и перемешиваем
+            currentQuestionIndex = 0;
+            score = 0;
+            scoreEl.textContent = score;
+            totalQuestionsEl.textContent = shuffledQuestions.length;
+            questionAreaEl.classList.remove('hidden');
+            gameOverAreaEl.classList.add('hidden');
+            nextQuestionBtn.classList.add('hidden');
+            feedbackEl.textContent = '';
+            scoreAreaEl.classList.remove('hidden');
+            displayQuestion();
+        }
+
+        function displayQuestion() {
+            if (currentQuestionIndex >= shuffledQuestions.length) {
+                endGame();
+                return;
+            }
+
+            const currentQuestion = shuffledQuestions[currentQuestionIndex];
+            countryNameEl.textContent = currentQuestion.country;
+            questionNumberEl.textContent = currentQuestionIndex + 1;
+            optionsContainerEl.innerHTML = ''; // Очищаем предыдущие варианты
+
+            const allOptions = shuffleArray([...currentQuestion.options, currentQuestion.capital]);
+
+            allOptions.forEach(option => {
+                const button = document.createElement('button');
+                button.classList.add('option-btn');
+                button.textContent = option;
+                button.addEventListener('click', () => selectAnswer(option, currentQuestion.capital, button));
+                optionsContainerEl.appendChild(button);
+            });
+            feedbackEl.textContent = '';
+            nextQuestionBtn.classList.add('hidden');
+        }
+
+        function selectAnswer(selectedOption, correctAnswer, button) {
+            // Отключить все кнопки после выбора
+            const optionButtons = optionsContainerEl.querySelectorAll('.option-btn');
+            optionButtons.forEach(btn => btn.disabled = true);
+
+            if (selectedOption === correctAnswer) {
+                score++;
+                scoreEl.textContent = score;
+                feedbackEl.textContent = "Правильно!";
+                feedbackEl.style.color = '#2ecc71';
+                button.classList.add('correct');
+            } else {
+                feedbackEl.textContent = `Неправильно. Правильный ответ: ${correctAnswer}`;
+                feedbackEl.style.color = '#e74c3c';
+                button.classList.add('incorrect');
+                // Подсветить правильный ответ
+                optionButtons.forEach(btn => {
+                    if (btn.textContent === correctAnswer) {
+                        btn.classList.add('correct');
+                    }
+                });
+            }
+            
+            if (currentQuestionIndex < shuffledQuestions.length -1) {
+                 nextQuestionBtn.classList.remove('hidden');
+            } else {
+                 // Если это последний вопрос, сразу показываем результат или кнопку "завершить"
+                 setTimeout(endGame, 1500); // Небольшая задержка, чтобы увидеть результат последнего ответа
+            }
+        }
+
+        function nextQuestion() {
+            currentQuestionIndex++;
+            displayQuestion();
+        }
+        
+        function endGame() {
+            questionAreaEl.classList.add('hidden');
+            scoreAreaEl.classList.add('hidden');
+            nextQuestionBtn.classList.add('hidden');
+            gameOverAreaEl.classList.remove('hidden');
+            feedbackEl.textContent = ''; // Очищаем фидбек с последнего вопроса
+            finalScoreEl.textContent = `Ваш итоговый счет: ${score} из ${shuffledQuestions.length}`;
+        }
+
+        nextQuestionBtn.addEventListener('click', nextQuestion);
+        restartBtn.addEventListener('click', startGame);
+
+        // Начать игру при загрузке
+        startGame();
+
+    </script>
+</body>
+</html>
